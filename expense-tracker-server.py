@@ -5,7 +5,6 @@ from kivymd.uix.button import MDFlatButton,MDRectangleFlatButton,MDIconButton,MD
 from LoginView import LoginView
 class SimpleApp(MDApp):
     def build(self):
-        login_view=LoginView()
-        mainScreen= login_view.show()
+        mainScreen= LoginView().run()
         return mainScreen
 SimpleApp().run()
