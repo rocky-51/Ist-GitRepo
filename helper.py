@@ -25,8 +25,7 @@ MDTextField:
     helper_text_mode:'on_focus'
     size_hint_x: None
     width: "200dp"
-    valign:'top'
-    pos_hint: {"center_x": .5, "center_y": .2,'top':0.35,'bottom':0.5}
+    pos_hint: {"center_x": .5, "center_y": .3}
 """
 l_button="""
 MDRectangleFlatButton:
