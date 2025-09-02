@@ -1,11 +1,13 @@
-from kivy.config import Config
-Config.set('graphics', 'width', '700')  # Set width to 800 pixels
-Config.set('graphics', 'height', '350')
+# from kivy.config import Config
+# Config.set('graphics', 'width', '700')  # Set width to 800 pixels
+# Config.set('graphics', 'height', '350')
 from kivymd.app import MDApp
 from kivymd.uix.screen import Screen
 from kivymd.uix.button import MDFlatButton,MDRectangleFlatButton,MDIconButton,MDFloatingActionButton
 from kivy.lang import Builder
 from kivymd.uix.dialog import MDDialog
+from kivy.core.window import Window
+Window.size=(500,300)
 from helper import expensetracker,u_textField,p_textField
 import Signup
 
@@ -20,7 +22,8 @@ class LoginView(MDApp):
         self.u_text_field=Builder.load_string(u_textField)
         p_text_field=Builder.load_string(p_textField)
         loginButton=MDRectangleFlatButton(text="Login ",
-                    pos_hint={ "center_x":.45,"center_y": 0.37,'bottom':0.5,'right':0.8},
+                    pos_hint={"center_y": 0.37,'right':0.9},
+                    halign='center',
                     on_release=self.show)
         s_button=MDFlatButton(text="Don't have an account? Click Here ",
                             pos_hint={"center_x": .5,"center_y": 0.08},
