@@ -4,9 +4,7 @@ from kivymd.uix.datatables import MDDataTable
 from kivy.metrics import dp
 from kivy.core.window import Window
 Window.size=(300,500)
-# from kivy.config import Config
-# Config.set('graphics', 'width', '700')  # Set width to 800 pixels
-# Config.set('graphics', 'height', '350')
+
 
 class Expenses_Table(MDApp):
     def build(self):
@@ -20,13 +18,7 @@ class Expenses_Table(MDApp):
                                         ("User_ID",dp(30)),
                                         ("Category_Name",dp(30)),
                                         ("Category_Color",dp(30))
-                                    ],
-                          row_data=[
-                                        ("101","1001","Expenditure","Black"),
-                                        ("102","1002","Buying","Blue"),
-                                        ("103","1003","Fruits","Yellow"),
-                                        ("104","1004","Vegetables","Green")
-                                    ]       
+                                    ]      
                         )
         screen.add_widget(table)
         return screen
