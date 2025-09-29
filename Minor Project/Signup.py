@@ -1,6 +1,6 @@
 from kivymd.uix.screen import Screen
 from kivymd.app import MDApp
-from helper import expensetracker,u_textField,p_textField
+from helper import expensetracker
 
 class LoginView(MDApp):
     def build(self):
