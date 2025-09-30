@@ -31,3 +31,6 @@ class TransactionCategoryViewSet(viewsets.ModelViewSet):
        return TransactionCategory.objects.filter(user=self.request.user).order_by('-date')
    def perform_create(self, serializer):
        serializer.save(user=self.request.user)
+
+def as_views(request):
+   return render(None, 'LoginView.py', {})

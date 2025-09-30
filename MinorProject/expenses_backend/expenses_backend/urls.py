@@ -16,13 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework import routers
-from tracker.views import UserViewSet, TransactionsViewSet, TransactionCategoryViewSet
-router = routers.DefaultRouter()
-router.register(r'expenses', UserViewSet, basename='user')
-router.register(r'transactions', TransactionsViewSet, basename='transactions')
-router.register(r'categories', TransactionCategoryViewSet, basename='categories')
+# from rest_framework import routers
+# from tracker.views import UserViewSet, TransactionsViewSet, TransactionCategoryViewSet
+from MinorProject import LoginView
+# router = routers.DefaultRouter()
+# router.register(r'expenses', UserViewSet, basename='user')
+# router.register(r'transactions', TransactionsViewSet, basename='transactions')
+# router.register(r'categories', TransactionCategoryViewSet, basename='categories')
 urlpatterns = [
-   path('admin/', admin.site.urls),
-   path('api/', include(router.urls)),
+   path('', LoginView.as_view(), name='login'),
+#    path('api/', include(router.urls)),
 ]
