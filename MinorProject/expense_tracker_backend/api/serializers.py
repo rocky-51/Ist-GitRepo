@@ -7,8 +7,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['user_id', 'name', 'email', 'password', 'created_at']
-        read_only_fields = ['user_id', 'created_at']
+        fields = ['user_id', 'name', 'email', 'password', 'date_joined']
+        read_only_fields = ['user_id', 'date_joined']
+
 
     def create(self, validated_data):
         # Create user with hashed password
@@ -24,24 +25,32 @@ class UserSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TransactionCategory
-        fields = ['category_id', 'user_id', 'category_name', 'category_color']
-        read_only_fields = ['category_id', 'category_name']
+        fields = ['user_id', 'user', 'category_name', 'category_color']  # use actual model field names
+        read_only_fields = ['user_id']
 
 
 # ---------- Expense Serializer ----------
+
 class TransactionSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    category = CategorySerializer(read_only=True)
-    category_id = serializers.PrimaryKeyRelatedField(
+    category = serializers.PrimaryKeyRelatedField(
         queryset=TransactionCategory.objects.all(),
         source='category',
         write_only=True
     )
+    # expose category details on read
+    category_detail = CategorySerializer(source='category', read_only=True)
 
     class Meta:
         model = Transaction
         fields = [
-            'transaction_id', 'user_id', 'category_id',
-            'transaction_name', 'transaction_amount', 'transaction_date', 'tansaction_time'
+            'transaction_id',               # primary key (or transaction_id if you actually have that)
+            'user_id',             # nested read-only user object
+            'category_id',  # read-only nested category
+            'transaction_name',
+            'transaction_amount',
+            'transaction_date',
+            'transaction_time',
         ]
         read_only_fields = ['transaction_id', 'transaction_date', 'user_id']
+

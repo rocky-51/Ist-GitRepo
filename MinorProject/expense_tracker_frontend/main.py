@@ -1,266 +1,180 @@
-import requests
-from kivy.lang import Builder
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
+from kivymd.uix.screenmanager import MDScreenManager
+from kivymd.toast import toast
 from kivymd.uix.list import OneLineListItem
-from kivymd.uix.dialog import MDDialog
-from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.lang import Builder
+# from screens.login_screen import login_screen
+from screens.helper import expensetracker
+from screens.register_screen import register_screen
+from screens.home_screen import home_screen
+from screens.add_transaction_screen import add_transaction_screen
+import requests
+import json
+import os
 
-BASE_URL = "http://127.0.0.1:8000/api/"
+# Load screen layouts
+# Builder.load_string(login_screen)
+Builder.load_string(expensetracker)
+Builder.load_string(register_screen)
+Builder.load_string(home_screen)
+Builder.load_string(add_transaction_screen)
 
-KV = """
-ScreenManager:
-    LoginScreen:
-    RegisterScreen:
-    DashboardScreen:
-    AddExpenseScreen:
-    HistoryScreen:
+TOKEN_FILE = "auth_token.json"
 
-<LoginScreen>:
-    name: "login"
-    MDBoxLayout:
-        orientation: 'vertical'
-        spacing: dp(20)
-        padding: dp(40)
-        MDLabel:
-            text: "Expenses Tracker"
-            halign: "center"
-            font_style: "H4"
-        MDTextField:
-            id: username
-            hint_text: "Username"
-            icon_right: "account"
-        MDTextField:
-            id: password
-            hint_text: "Password"
-            icon_right: "key"
-            password: True
-        MDRaisedButton:
-            text: "Login"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                app.login(username.text, password.text)
-        MDRaisedButton:
-            text: "Register"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                root.manager.current = "register"
 
-<RegisterScreen>:
-    name: "register"
-    MDBoxLayout:
-        orientation: 'vertical'
-        spacing: dp(20)
-        padding: dp(40)
-        MDLabel:
-            text: "Register"
-            halign: "center"
-            font_style: "H4"
-        MDTextField:
-            id: reg_username
-            hint_text: "Username"
-            icon_right: "account"
-        MDTextField:
-            id: reg_password
-            hint_text: "Password"
-            icon_right: "key"
-            password: True
-        MDTextField:
-            id: reg_password2
-            hint_text: "Confirm Password"
-            icon_right: "key"
-            password: True
-        MDRaisedButton:
-            text: "Register"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                app.register(reg_username.text, reg_password.text, reg_password2.text)
-        MDRaisedButton:
-            text: "Back to Login"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                root.manager.current = "login"
+class ExpenseTrackerApp(MDApp):
+    API_BASE = "http://127.0.0.1:8000/api"
+    TOKEN_URL = "http://127.0.0.1:8000/api/token/"
 
-<DashboardScreen>:
-    name: "dashboard"
-    MDBoxLayout:
-        orientation: "vertical"
-        padding: dp(20)
-        spacing: dp(20)
-        MDLabel:
-            text: "Dashboard"
-            halign: "center"
-            font_style: "H4"
-        MDRaisedButton:
-            text: "Add Expense"
-            on_release:
-                root.manager.current = "add_expense"
-        MDRaisedButton:
-            text: "View History"
-            on_release:
-                root.manager.current = "history"
-        MDLabel:
-            id: total_label
-            text: "Total Expenses: $0"
-            halign: "center"
-        MDRaisedButton:
-            text: "Logout"
-            on_release:
-                root.manager.current = "login"
-
-<AddExpenseScreen>:
-    name: "add_expense"
-    MDBoxLayout:
-        orientation: "vertical"
-        padding: dp(20)
-        spacing: dp(20)
-        MDTextField:
-            id: name
-            hint_text: "Expense Name"
-        MDTextField:
-            id: amount
-            hint_text: "Amount"
-            input_filter: "float"
-        MDRaisedButton:
-            text: "Add"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                app.add_expense(name.text, amount.text)
-        MDRaisedButton:
-            text: "Back"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                root.manager.current = "dashboard"
-
-<HistoryScreen>:
-    name: "history"
-    MDBoxLayout:
-        orientation: "vertical"
-        MDLabel:
-            text: "Expense History"
-            font_style: "H4"
-            halign: "center"
-        ScrollView:
-            MDList:
-                id: expense_list
-        MDRaisedButton:
-            text: "Back"
-            pos_hint: {"center_x": 0.5}
-            on_release:
-                root.manager.current = "dashboard"
-"""
-
-class LoginScreen(MDScreen):
-    pass
-
-class RegisterScreen(MDScreen):
-    pass
-
-class DashboardScreen(MDScreen):
-    pass
-
-class AddExpenseScreen(MDScreen):
-    pass
-
-class HistoryScreen(MDScreen):
-    pass
-
-class ExpensesApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
-        self.sm = Builder.load_string(KV)
-        self.token = None
-        self.expenses = []
-        self.dialog = None
+        self.theme_cls.primary_palette = "Green"
+
+        self.sm = MDScreenManager()
+        self.sm.add_widget(LoginScreen(name="login"))
+        self.sm.add_widget(RegisterScreen(name="register"))
+        self.sm.add_widget(HomeScreen(name="home"))
+        self.sm.add_widget(AddTransactionScreen(name="add_transaction"))
         return self.sm
 
-    # --- Dialog helper ---
-    def show_dialog(self, title, text):
-        if self.dialog:
-            self.dialog.dismiss()
-        self.dialog = MDDialog(title=title, text=text, size_hint=(0.8, None), height=200)
-        self.dialog.open()
+    def save_token(self, token_data):
+        """Save token to local file"""
+        with open(TOKEN_FILE, "w") as f:
+            json.dump(token_data, f)
 
-    # --- Login ---
-    def login(self, username, password):
-        if not username or not password:
-            self.show_dialog("Error", "Please enter username and password")
-            return
-        url = BASE_URL + "login/"
-        try:
-            response = requests.post(url, data={"username": username, "password": password})
+    def load_token(self):
+        """Load token from file if exists"""
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                return json.load(f)
+        return None
+    
+    def refresh_token(self):
+        token_data = self.load_token()
+        if token_data and "refresh" in token_data:
+            response = requests.post(
+                f"{self.API_BASE}/token/refresh/",
+                data={"refresh": token_data["refresh"]}
+            )
             if response.status_code == 200:
-                self.token = response.json().get("token")
-                self.sm.current = "dashboard"
-                self.get_expenses()
-            else:
-                self.show_dialog("Login Failed", response.json().get("non_field_errors", "Invalid credentials"))
-        except Exception as e:
-            self.show_dialog("Error", str(e))
+                new_tokens = response.json()
+                token_data.update(new_tokens)
+                self.save_token(token_data)
 
-    # --- Register ---
-    def register(self, username, password1, password2):
-        if not username or not password1 or not password2:
-            self.show_dialog("Error", "All fields are required")
-            return
-        if password1 != password2:
-            self.show_dialog("Error", "Passwords do not match")
-            return
-        url = BASE_URL + "register/"
-        try:
-            response = requests.post(url, data={"username": username, "password": password1})
-            if response.status_code == 201:
-                self.show_dialog("Success", "Registration successful! Please login.")
-                self.sm.current = "login"
-            else:
-                self.show_dialog("Registration Failed", str(response.json()))
-        except Exception as e:
-            self.show_dialog("Error", str(e))
 
-    # --- Get Expenses ---
-    def get_expenses(self):
-        if not self.token:
+    def get_headers(self):
+        token_data = self.load_token()
+        if token_data:
+            access_token = token_data.get("access")
+            return {"Authorization": f"Bearer {access_token}"}
+        return {}
+
+
+class LoginScreen(MDScreen):
+    def login(self):
+        email = self.ids.email.text.strip()
+        password = self.ids.password.text.strip()
+
+        if not email or not password:
+            toast("Enter both email and password")
             return
-        url = BASE_URL + "expenses/"
-        headers = {"Authorization": f"Token {self.token}"}
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.post(
+                ExpenseTrackerApp.TOKEN_URL,
+                data={"email": email, "password": password},
+            )
             if response.status_code == 200:
-                self.expenses = response.json()
-                self.update_total()
-                self.update_history()
+                token_data = response.json()
+                app = MDApp.get_running_app()
+                with open(TOKEN_FILE, "w") as f:
+                    json.dump(token_data, f)
+                toast("Login successful!")
+                self.manager.current = "home"
             else:
-                self.show_dialog("Error", "Failed to fetch expenses")
+                toast("Invalid credentials — please register first.")
+                self.manager.current = "register"
         except Exception as e:
-            self.show_dialog("Error", str(e))
+            toast(f"Error: {e}")
 
-    # --- Add Expense ---
-    def add_expense(self, name, amount):
-        if not name or not amount:
-            self.show_dialog("Error", "Please enter expense name and amount")
+
+class RegisterScreen(MDScreen):
+    def register_user(self):
+        name = self.ids.name.text.strip()
+        email = self.ids.email.text.strip()
+        password = self.ids.password.text.strip()
+
+        if not name or not email or not password:
+            toast("Please fill all fields")
             return
-        url = BASE_URL + "expenses/"
-        headers = {"Authorization": f"Token {self.token}"}
+
         try:
-            data = {"transaction_name": name, "transaction_amount": amount}
-            response = requests.post(url, headers=headers, data=data)
-            if response.status_code == 201:
-                self.get_expenses()
-                self.sm.current = "dashboard"
+            response = requests.post(
+                f"{ExpenseTrackerApp.API_BASE}/users/",
+                data={
+                    "name": name,
+                    "email": email,
+                    "password": password,
+                },
+            )
+
+            if response.status_code in (200, 201):
+                toast("Registration successful! Please log in.")
+                self.manager.current = "login"
             else:
-                self.show_dialog("Error", "Failed to add expense")
+                error = response.json()
+                toast(f"Registration failed: {error}")
         except Exception as e:
-            self.show_dialog("Error", str(e))
+            toast(f"Error: {e}")
 
-    # --- Update UI ---
-    def update_total(self):
-        total = sum(float(exp['transaction_amount']) for exp in self.expenses)
-        self.sm.get_screen("dashboard").ids.total_label.text = f"Total Expenses: ${total:.2f}"
+class HomeScreen(MDScreen):
+    def on_enter(self):
+        self.load_transactions()
 
-    def update_history(self):
-        expense_list = self.sm.get_screen("history").ids.expense_list
-        expense_list.clear_widgets()
-        for exp in self.expenses:
-            expense_list.add_widget(OneLineListItem(text=f"{exp['transaction_name']} - ${exp['transaction_amount']}"))
+    def load_transactions(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                self.ids.transactions_list.clear_widgets()
+                for t in data:
+                    self.ids.transactions_list.add_widget(
+                        OneLineListItem(text=f"{t['transaction_name']} - ₹{t['transaction_amount']}")
+                    )
+            else:
+                toast("Unauthorized or failed to fetch transactions")
+        except Exception as e:
+            toast(f"Error: {e}")
 
-ExpensesApp().run()
+
+class AddTransactionScreen(MDScreen):
+    def add_transaction(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        name = self.ids.name.text
+        amount = self.ids.amount.text
+        category = self.ids.category.text
+
+        try:
+            response = requests.post(
+                f"{app.API_BASE}/transactions/",
+                data={
+                    "transaction_name": name,
+                    "transaction_amount": amount,
+                    "category": category,
+                },
+                headers=headers,
+            )
+            if response.status_code == 201:
+                toast("Transaction added!")
+                self.manager.current = "home"
+            else:
+                toast("Failed to add transaction")
+        except Exception as e:
+            toast(f"Error: {e}")
+
+if __name__ == "__main__":
+    ExpenseTrackerApp().run()

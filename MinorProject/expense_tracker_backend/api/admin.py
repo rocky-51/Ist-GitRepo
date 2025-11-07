@@ -31,9 +31,9 @@ class TransactionCategoryAdmin(admin.ModelAdmin):
 
 # Expense Admin
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('transaction_id', 'user_id', 'category_id','transaction_name', 'transaction_amount', 'transaction_date', 'transaction_time')
+    list_display = ('transaction_id', 'user_id', 'category_id', 'transaction_name', 'transaction_amount', 'transaction_date', 'transaction_time')
     list_filter = ('category_id',)
-    search_fields = ('transaction_id', 'user_id', 'category_id')
+    search_fields = ('transaction_name', 'user__email', 'category__category_name')
     
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(TransactionCategory, TransactionCategoryAdmin)
