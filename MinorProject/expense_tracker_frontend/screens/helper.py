@@ -32,6 +32,7 @@ expensetracker="""
                 hint_text:"Enter Password "
                 helper_text:"or click on 'click here'"
                 helper_text_mode:'on_focus'
+                password: True
                 size_hint_x: None
                 width: "200dp"
                 pos_hint: {"center_x": .5, "center_y": .3}

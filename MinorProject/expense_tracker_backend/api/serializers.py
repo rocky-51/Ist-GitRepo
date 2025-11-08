@@ -25,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TransactionCategory
-        fields = ['user_id', 'user', 'category_name', 'category_color']  # use actual model field names
+        fields = ['user_id', 'category_id', 'category_name', 'category_color']  # use actual model field names
         read_only_fields = ['user_id']
 
 
