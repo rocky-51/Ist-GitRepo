@@ -41,10 +41,6 @@ expensetracker="""
                 pos_hint : {"center_x":.5}
                 font_size : 15
                 on_release: root.login()
-            MDFlatButton:
-                text:"Don't have an account? Click Here "
-                pos_hint:{"center_x": .5,"center_y": 0.08}
-                theme_text_color:"Primary"
             Widget :
                 size_hint_y : None
                 height : 30

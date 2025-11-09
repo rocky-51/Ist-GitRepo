@@ -1,0 +1,18 @@
+<HomeScreen>:
+    MDBoxLayout:
+        orientation: "vertical"
+        spacing: "10dp"
+        padding: "15dp"
+
+        MDTopAppBar:
+            title: "My Transactions"
+            right_action_items: [["logout", lambda x: app.root.current = 'login']]
+
+        ScrollView:
+            MDList:
+                id: transactions_list
+
+        MDFloatingActionButton:
+            icon: "refresh"
+            pos_hint: {"center_x": 0.9, "center_y": 0.1}
+            on_release: root.load_transactions()

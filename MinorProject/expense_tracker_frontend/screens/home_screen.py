@@ -2,18 +2,24 @@ home_screen='''
 <HomeScreen>:
     MDBoxLayout:
         orientation: "vertical"
-        padding: "20dp"
-        MDTopAppBar:
-            title: "My Transactions"
-            elevation: 10
+        spacing: "30dp"
+        padding: "40dp"
+        MDLabel:
+            text: "💰 Expense Tracker"
+            halign: "center"
+            font_style: "H4"
 
-        ScrollView:
-            MDList:
-                id: transactions_list
+        MDLabel:
+            text: "Track your spending smartly"
+            halign: "center"
 
-        MDFloatingActionButton:
-            icon: "plus"
-            pos_hint: {"center_x": 0.9, "center_y": 0.1}
-            md_bg_color: app.theme_cls.primary_color
-            on_release: root.manager.current = "add_transaction"
+        MDRaisedButton:
+            text: "Login"
+            pos_hint: {"center_x": 0.5}
+            on_release: root.manager.current = "login"
+
+        MDFlatButton:
+            text: "Register"
+            pos_hint: {"center_x": 0.5}
+            on_release: root.manager.current = "register"
 '''
