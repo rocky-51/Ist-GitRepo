@@ -3,13 +3,17 @@ from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.screen import MDScreen
 from kivymd.toast import toast
 from kivy.lang import Builder
+from screens.splash_screen import splash_screen
 from screens.helper import expensetracker
 from screens.register_screen import register_screen
-# from screens.home_screen import home_screen
 from screens.dashboard_screen import dashboard_screen
 from screens.add_category_screen import add_category_screen
 from screens.add_transaction_screen import add_transaction_screen
-from screens.update_transaction_screen import update_transaction_screen
+from screens.transactions_sceen import transactions_screen
+from kivy.uix.screenmanager import FadeTransition
+from kivy.clock import Clock
+from kivy.animation import Animation
+
 import requests
 import json
 import os
@@ -26,128 +30,49 @@ class ExpenseTrackerApp(MDApp):
         self.theme_cls.primary_palette = "Teal"
 
         # Load screens
+        Builder.load_string(splash_screen)
         Builder.load_string(expensetracker)
         Builder.load_string(register_screen)
         Builder.load_string(dashboard_screen)
-        # Builder.load_string(home_screen)
-        # Builder.load_file("screens/home_screen.kv")
         Builder.load_string(add_category_screen)
         Builder.load_string(add_transaction_screen)
-        # Builder.load_string(update_transaction_screen)
+        Builder.load_string(transactions_screen)
 
-        sm = MDScreenManager()
-        sm.add_widget(HomeScreen(name="home"))
+
+        sm = MDScreenManager(transition=FadeTransition(duration=0.5)) 
+        sm.add_widget(SplashScreen(name="splash"))
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(RegisterScreen(name="register"))
         sm.add_widget(DashboardScreen(name="dashboard"))
         sm.add_widget(AddCategoryScreen(name="add_category"))
         sm.add_widget(AddTransactionScreen(name="add_transaction"))
-        sm.add_widget(UpdateTransactionScreen(name="update_transaction"))
+        sm.add_widget(TransactionsScreen(name="transactions"))
+        sm.current = "splash"
         return sm
 
+# --------------------- SPLASH SCREEN ---------------------
 
-# --------------------- HOME ---------------------
-# --------------------- HOME (Transaction List & Edit) ---------------------
-class HomeScreen(MDScreen):
+class SplashScreen(MDScreen):
     def on_enter(self):
-        self.load_transactions()
+        # Start fade-in animation for logo and text
+        self.ids.logo.opacity = 0
+        self.ids.app_name.opacity = 0
 
-    def get_headers(self):
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, "r") as f:
-                data = json.load(f)
-                access = data.get("access")
-                return {"Authorization": f"Bearer {access}"}
-        return {}
+        fade_in = Animation(opacity=1, duration=1.5)
+        fade_in.start(self.ids.logo)
+        fade_in.start(self.ids.app_name)
 
-    def load_transactions(self):
-        app = MDApp.get_running_app()
-        headers = self.get_headers()
+        # After fade-in, stay for a while, then fade-out
+        Clock.schedule_once(self.start_fade_out, 5)
 
-        try:
-            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                self.ids.transactions_list.clear_widgets()
-                from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget
+    def start_fade_out(self, *args):
+        fade_out = Animation(opacity=0, duration=1)
+        fade_out.bind(on_complete=lambda *x: self.go_to_login())
+        fade_out.start(self)
 
-                for t in data[::-1]:
-                    item = TwoLineIconListItem(
-                        text=f"{t['transaction_name']} - ₹{t['transaction_amount']}",
-                        secondary_text=f"{t['transaction_date']} {t['transaction_time']}",
-                        on_release=lambda x, tid=t['transaction_id']: self.edit_transaction(tid),
-                    )
-                    item.add_widget(IconLeftWidget(icon="pencil"))
-                    self.ids.transactions_list.add_widget(item)
-            else:
-                toast("No transactions found.")
-        except Exception as e:
-            toast(f"Error: {e}")
-
-    def edit_transaction(self, transaction_id):
-        # Store ID temporarily and move to Update Screen
-        app = MDApp.get_running_app()
-        app.transaction_to_edit = transaction_id
-        self.manager.current = "update_transaction"
-
-
-# --------------------- UPDATE TRANSACTION ---------------------
-class UpdateTransactionScreen(MDScreen):
-    def on_pre_enter(self):
-        """Load existing transaction details."""
-        app = MDApp.get_running_app()
-        tid = getattr(app, "transaction_to_edit", None)
-        if not tid:
-            toast("No transaction selected.")
-            self.manager.current = "home"
-            return
-
-        headers = DashboardScreen().get_headers()
-        try:
-            response = requests.get(f"{app.API_BASE}/transactions/{tid}/", headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                self.ids.name.text = data["transaction_name"]
-                self.ids.amount.text = str(data["transaction_amount"])
-                self.ids.category.text = str(data["category"])
-            else:
-                toast("Could not fetch transaction details.")
-        except Exception as e:
-            toast(f"Error: {e}")
-
-    def update_transaction(self):
-        """Send updated data to backend."""
-        app = MDApp.get_running_app()
-        tid = getattr(app, "transaction_to_edit", None)
-        headers = DashboardScreen().get_headers()
-
-        name = self.ids.name.text.strip()
-        amount = self.ids.amount.text.strip()
-        category = self.ids.category.text.strip()
-
-        if not name or not amount or not category:
-            toast("Please fill all fields")
-            return
-
-        data = {
-            "transaction_name": name,
-            "transaction_amount": amount,
-            "category": category,
-        }
-
-        try:
-            response = requests.put(
-                f"{app.API_BASE}/transactions/{tid}/",
-                data=data,
-                headers=headers,
-            )
-            if response.status_code in (200, 202):
-                toast("Transaction updated successfully!")
-                self.manager.current = "home"
-            else:
-                toast("Failed to update transaction.")
-        except Exception as e:
-            toast(f"Error: {e}")
+    def go_to_login(self, *args):
+        self.manager.current = "login"
+        self.opacity = 1  # reset opacity for next time
 
 # --------------------- LOGIN ---------------------
 class LoginScreen(MDScreen):
@@ -243,8 +168,112 @@ class DashboardScreen(MDScreen):
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
         toast("Logged out successfully")
-        self.manager.current = "home"
+        self.manager.current = "login"
 
+# --------------------- TRANSACTIONS SCREEN ---------------------
+class TransactionsScreen(MDScreen):
+    def on_enter(self):
+        self.load_transactions()
+
+    def get_headers(self):
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                data = json.load(f)
+                access = data.get("access")
+                return {"Authorization": f"Bearer {access}"}
+        return {}
+
+    def load_transactions(self):
+        """Fetch all transactions from backend"""
+        app = MDApp.get_running_app()
+        headers = self.get_headers()
+
+        try:
+            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                self.ids.transactions_list.clear_widgets()
+                from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget, IconRightWidget
+
+                for t in data[::-1]:  # newest first
+                    item = TwoLineIconListItem(
+                        text=f"{t['transaction_name']} - ₹{t['transaction_amount']}",
+                        secondary_text=f"{t['transaction_date']} | Category: {t['category']}",
+                    )
+
+                    # Edit icon
+                    edit_icon = IconLeftWidget(
+                        icon="pencil",
+                        on_release=lambda x, tid=t["transaction_id"]: self.edit_transaction(tid),
+                    )
+                    item.add_widget(edit_icon)
+
+                    # Delete icon
+                    delete_icon = IconRightWidget(
+                        icon="delete",
+                        on_release=lambda x, tid=t["transaction_id"]: self.delete_transaction(tid),
+                    )
+                    item.add_widget(delete_icon)
+
+                    self.ids.transactions_list.add_widget(item)
+            else:
+                toast("No transactions found.")
+        except Exception as e:
+            toast(f"Error: {e}")
+
+    def edit_transaction(self, transaction_id):
+        """Store selected transaction ID and move to Update Screen"""
+        app = MDApp.get_running_app()
+        app.transaction_to_edit = transaction_id
+        self.manager.current = "update_transaction"
+
+    def delete_transaction(self, transaction_id):
+        """Delete selected transaction"""
+        app = MDApp.get_running_app()
+        headers = self.get_headers()
+
+        try:
+            response = requests.delete(
+                f"{app.API_BASE}/transactions/{transaction_id}/", headers=headers
+            )
+            if response.status_code in (200, 204):
+                toast("Transaction deleted successfully.")
+                self.load_transactions()
+            else:
+                toast("Failed to delete transaction.")
+        except Exception as e:
+            toast(f"Error: {e}")
+
+    def load_dashboard(self):
+        app = MDApp.get_running_app()
+        headers = self.get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                total_expenses = sum(float(t["transaction_amount"]) for t in data)
+                self.ids.balance.text = f"₹{10000 - total_expenses:.2f}"
+                self.ids.expenses.text = f"₹{total_expenses:.2f}"
+
+                self.ids.transactions_list.clear_widgets()
+                from kivymd.uix.list import OneLineListItem
+                for t in data[-5:][::-1]:
+                    self.ids.transactions_list.add_widget(
+                        OneLineListItem(
+                            text=f"{t['transaction_name']} - ₹{t['transaction_amount']}"
+                        )
+                    )
+            else:
+                toast("No transactions found.")
+        except Exception as e:
+            toast(f"Error: {e}")
+        self.manager.current = "dashboard"
+
+    def logout(self):
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+        toast("Logged out successfully")
+        self.manager.current = "login"
 
 # --------------------- ADD CATEGORY ---------------------
 class AddCategoryScreen(MDScreen):

@@ -46,4 +46,11 @@ dashboard_screen='''
             icon: "plus"
             pos_hint: {"center_x": 0.95, "center_y": 0.1}
             on_release: root.manager.current = "add_transaction"
+            
+        MDFloatingActionButton:
+            icon: "file-document"
+            md_bg_color: app.theme_cls.primary_color
+            pos_hint: {"center_x": 0.65, "center_y": 0.1}
+            on_release: root.manager.current = "transactions"
+
 '''
