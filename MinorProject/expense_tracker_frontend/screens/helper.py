@@ -12,12 +12,10 @@ expensetracker="""
             spacing : 30
             orientation : "vertical"
             MDLabel:
-                text:"Expense Tracker"
-                font_style:"H3"
-                pos_hint:{'top':1.3}
-                halign:'center'
-                valign:'top'
-                theme_text_color:"Hint"
+                text: "Welcome Back!"
+                halign: "center"
+                font_style: "H4"
+                theme_text_color: "Custom"
             MDTextField:
                 id: email
                 hint_text:"Enter Username "
@@ -44,4 +42,8 @@ expensetracker="""
             Widget :
                 size_hint_y : None
                 height : 30
+            MDRoundFlatButton :
+                text: "New user? Register here"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.manager.current = "register"
 """

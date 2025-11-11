@@ -24,10 +24,18 @@ TOKEN_FILE = "auth_token.json"
 class ExpenseTrackerApp(MDApp):
     API_BASE = "http://127.0.0.1:8000/api"
     TOKEN_URL = f"{API_BASE}/token/"
+    
+    def get_headers(self):
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                data = json.load(f)
+                access = data.get("access")
+                return {"Authorization": f"Bearer {access}"}
+        return {}
 
     def build(self):
         self.theme_cls.theme_style = "Dark"
-        self.theme_cls.primary_palette = "Teal"
+        self.theme_cls.primary_palette = "Green"
 
         # Load screens
         Builder.load_string(splash_screen)
@@ -131,14 +139,6 @@ class RegisterScreen(MDScreen):
 class DashboardScreen(MDScreen):
     def on_enter(self):
         self.load_dashboard()
-
-    def get_headers(self):
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, "r") as f:
-                data = json.load(f)
-                access = data.get("access")
-                return {"Authorization": f"Bearer {access}"}
-        return {}
 
     def load_dashboard(self):
         app = MDApp.get_running_app()
