@@ -1,6 +1,8 @@
 from kivymd.app import MDApp
 from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.screen import MDScreen
+from kivymd.uix.menu import MDDropdownMenu
+from kivy.metrics import dp
 from kivymd.toast import toast
 from kivy.lang import Builder
 from screens.splash_screen import splash_screen
@@ -20,6 +22,19 @@ import os
 
 TOKEN_FILE = "auth_token.json"
 
+DEFAULT_CATEGORIES = [
+    {"text": "Food & Dining", "color": "#E57373"},
+    {"text": "Transportation", "color": "#64B5F6"},
+    {"text": "Shopping", "color": "#BA68C8"},
+    {"text": "Entertainment", "color": "#FFD54F"},
+    {"text": "Bills & Utilities", "color": "#81C784"},
+    {"text": "Healthcare", "color": "#4DB6AC"},
+    {"text": "Education", "color": "#A1887F"},
+    {"text": "Groceries", "color": "#FFF176"},
+    {"text": "Travel", "color": "#7986CB"},
+    {"text": "Miscellaneous", "color": "#B0BEC5"},
+]
+
 
 class ExpenseTrackerApp(MDApp):
     API_BASE = "http://127.0.0.1:8000/api"
@@ -33,9 +48,11 @@ class ExpenseTrackerApp(MDApp):
                 return {"Authorization": f"Bearer {access}"}
         return {}
 
+    
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Green"
+        self.theme_cls.primary_hue = "600"
 
         # Load screens
         Builder.load_string(splash_screen)
@@ -142,7 +159,7 @@ class DashboardScreen(MDScreen):
 
     def load_dashboard(self):
         app = MDApp.get_running_app()
-        headers = self.get_headers()
+        headers = MDApp.get_running_app().get_headers()
         try:
             response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
             if response.status_code == 200:
@@ -173,7 +190,7 @@ class DashboardScreen(MDScreen):
 # --------------------- TRANSACTIONS SCREEN ---------------------
 class TransactionsScreen(MDScreen):
     def on_enter(self):
-        self.load_transactions()
+        headers = MDApp.get_running_app().get_headers()
 
     def get_headers(self):
         if os.path.exists(TOKEN_FILE):
@@ -186,7 +203,7 @@ class TransactionsScreen(MDScreen):
     def load_transactions(self):
         """Fetch all transactions from backend"""
         app = MDApp.get_running_app()
-        headers = self.get_headers()
+        headers = MDApp.get_running_app().get_headers()
 
         try:
             response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
@@ -230,7 +247,7 @@ class TransactionsScreen(MDScreen):
     def delete_transaction(self, transaction_id):
         """Delete selected transaction"""
         app = MDApp.get_running_app()
-        headers = self.get_headers()
+        headers = MDApp.get_running_app().get_headers()
 
         try:
             response = requests.delete(
@@ -246,7 +263,7 @@ class TransactionsScreen(MDScreen):
 
     def load_dashboard(self):
         app = MDApp.get_running_app()
-        headers = self.get_headers()
+        headers = MDApp.get_running_app().get_headers()
         try:
             response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
             if response.status_code == 200:
@@ -277,52 +294,121 @@ class TransactionsScreen(MDScreen):
 
 # --------------------- ADD CATEGORY ---------------------
 class AddCategoryScreen(MDScreen):
+    def on_pre_enter(self):
+        menu_items = [
+            {
+                "text": c["text"],
+                "viewclass": "OneLineListItem",
+                "on_release": lambda x=c: self.set_category_from_menu(x),
+            } for c in DEFAULT_CATEGORIES
+        ]
+
+        self.menu = MDDropdownMenu(
+            caller=self.ids.category_dropdown,
+            items=menu_items,
+            width_mult=4,
+            max_height=dp(260),
+        )
+
+    def set_category_from_menu(self, cat):
+        """Called when a default category is selected."""
+        # Ensure 'cat' dict has the correct structure
+        name = cat.get("text", "Unnamed")
+        color = cat.get("color", "#FFFFFF")
+
+        # ✅ Make sure these IDs exist in the KV file
+        self.ids.category_name.text = name
+        self.ids.category_color.text = color
+        self.menu.dismiss()
+
     def add_category(self):
-        app = MDApp.get_running_app()
-        name = self.ids.name.text.strip()
-        color = self.ids.color.text.strip()
+        """Send new category to backend or show toast if empty."""
+        from kivymd.toast import toast
+        from kivymd.app import MDApp
+        import requests
+
+        name = self.ids.category_name.text.strip()
+        color = self.ids.category_color.text.strip()
 
         if not name:
-            toast("Please enter a category name")
+            toast("Please enter category name")
+            return
+        if not color:
+            toast("Please enter color (e.g. #E57373)")
             return
 
-        headers = DashboardScreen().get_headers()
-        data = {"category_name": name}
-        if color:
-            data["category_color"] = color
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+        data = {
+            "category_name": name,
+            "category_color": color,
+        }
 
         try:
-            response = requests.post(
-                f"{app.API_BASE}/categories/",
-                data=data,
-                headers=headers,
-            )
+            response = requests.post(f"{app.API_BASE}/categories/", data=data, headers=headers)
             if response.status_code in (200, 201):
                 toast("Category added successfully!")
-                self.ids.name.text = ""
-                self.ids.color.text = ""
+                # Clear fields
+                self.ids.category_name.text = ""
+                self.ids.category_color.text = ""
+                # Return to dashboard
                 self.manager.current = "dashboard"
             else:
-                toast("Failed to add category.")
+                toast(f"Failed to add category ({response.status_code})")
         except Exception as e:
             toast(f"Error: {e}")
 
-
 # --------------------- ADD TRANSACTION ---------------------
 class AddTransactionScreen(MDScreen):
+    def on_pre_enter(self):
+        """Load categories when screen opens"""
+        self.load_categories()
+
+    def load_categories(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/categories/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+            else:
+                toast("Using default categories (no API data)")
+                data = [{"category_id": i + 1, "category_name": c["text"]} for i, c in enumerate(DEFAULT_CATEGORIES)]
+        except Exception:
+            toast("Offline — showing default categories")
+            data = [{"category_id": i + 1, "category_name": c["text"]} for i, c in enumerate(DEFAULT_CATEGORIES)]
+
+        menu_items = [
+            {
+                "text": f"{c['category_name']}",
+                "on_release": lambda x=c['category_id'], n=c['category_name']: self.set_category(x, n)
+            } for c in data
+        ]
+        self.menu = MDDropdownMenu(
+            caller=self.ids.category_dropdown,
+            items=menu_items,
+            width_mult=4,
+        )
+
+
+    def set_category(self, category_id, name):
+        self.ids.category_dropdown.set_item(name)
+        self.selected_category = category_id
+        self.menu.dismiss()
+
     def add_transaction(self):
         app = MDApp.get_running_app()
         name = self.ids.name.text.strip()
         amount = self.ids.amount.text.strip()
-        category = self.ids.category.text.strip()
+        category = getattr(self, "selected_category", None)
         date = self.ids.date.text.strip()
         time = self.ids.time.text.strip()
 
         if not name or not amount or not category:
-            toast("Please fill required fields")
+            toast("Please fill all required fields")
             return
 
-        headers = DashboardScreen().get_headers()
+        headers = app.get_headers()
         data = {
             "transaction_name": name,
             "transaction_amount": amount,
@@ -334,12 +420,8 @@ class AddTransactionScreen(MDScreen):
             data["transaction_time"] = time
 
         try:
-            response = requests.post(
-                f"{app.API_BASE}/transactions/",
-                data=data,
-                headers=headers,
-            )
-            if response.status_code == 201:
+            response = requests.post(f"{app.API_BASE}/transactions/", data=data, headers=headers)
+            if response.status_code in (200, 201):
                 toast("Transaction added successfully!")
                 self.manager.current = "dashboard"
             else:

@@ -30,12 +30,12 @@ add_transaction_screen='''
                 input_filter: "float"
                 icon_right: "cash"
 
-            MDTextField:
-                id: category
-                hint_text: "Category ID"
-                helper_text: "Enter numeric category ID (e.g. 1 for Food)"
-                helper_text_mode: "on_focus"
-                icon_right: "shape"
+            MDDropDownItem:
+                id: category_dropdown
+                text: "Select Category"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.menu.open()
+                text_color: app.theme_cls.primary_light
 
             MDTextField:
                 id: date

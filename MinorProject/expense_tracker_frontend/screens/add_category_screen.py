@@ -18,13 +18,20 @@ add_category_screen = """
                 title: "Add Category"
                 elevation: 10
 
+            MDDropDownItem:
+                id: category_dropdown
+                text: "Choose Common Category"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.menu.open()
+                text_color: app.theme_cls.primary_light
+            
             MDTextField:
-                id: name
+                id: category_name
                 hint_text: "Category Name"
-                icon_right: "shape"
+                icon_right: "note-edit"
 
             MDTextField:
-                id: color
+                id: category_color
                 hint_text: "Category Color (e.g. #FF5733)"
                 helper_text: "Enter hex color code or name (optional)"
                 helper_text_mode: "on_focus"
