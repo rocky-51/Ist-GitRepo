@@ -39,6 +39,7 @@ DEFAULT_CATEGORIES = [
 class ExpenseTrackerApp(MDApp):
     API_BASE = "http://127.0.0.1:8000/api"
     TOKEN_URL = f"{API_BASE}/token/"
+    current_user_id = None
     
     def get_headers(self):
         if os.path.exists(TOKEN_FILE):
@@ -115,9 +116,17 @@ class LoginScreen(MDScreen):
                 data={"email": email, "password": password},
             )
             if response.status_code == 200:
-                token_data = response.json()
+                data = response.json()
+                access = data.get("access")
+                refresh = data.get("refresh")
+                user_id = data.get("user_id")
+
                 with open(TOKEN_FILE, "w") as f:
-                    json.dump(token_data, f)
+                    json.dump({"access": access, "refresh": refresh, "user_id": user_id}, f)
+
+                app = MDApp.get_running_app()
+                app.current_user_id = user_id  # ✅ store globally
+
                 toast("Login successful!")
                 self.manager.current = "dashboard"
             else:
@@ -322,14 +331,12 @@ class AddCategoryScreen(MDScreen):
         self.menu.dismiss()
 
     def add_category(self):
-        """Send new category to backend or show toast if empty."""
-        from kivymd.toast import toast
-        from kivymd.app import MDApp
-        import requests
 
+        # Step 1: Get form input
         name = self.ids.category_name.text.strip()
         color = self.ids.category_color.text.strip()
 
+        # Step 2: Validate input
         if not name:
             toast("Please enter category name")
             return
@@ -337,26 +344,39 @@ class AddCategoryScreen(MDScreen):
             toast("Please enter color (e.g. #E57373)")
             return
 
+        # Step 3: Access app instance
         app = MDApp.get_running_app()
         headers = app.get_headers()
+
+        # ✅ Step 4: Safely get user_id from the app
         data = {
             "category_name": name,
             "category_color": color,
         }
 
+
+        # Step 6: Send POST request
         try:
-            response = requests.post(f"{app.API_BASE}/categories/", data=data, headers=headers)
+            response = requests.post(
+                f"{app.API_BASE}/categories/",
+                json=data,  # ✅ use JSON payload
+                headers=headers,
+                timeout=5
+            )
+
+            print("Response:", response.status_code, response.text)
+
             if response.status_code in (200, 201):
                 toast("Category added successfully!")
-                # Clear fields
                 self.ids.category_name.text = ""
                 self.ids.category_color.text = ""
-                # Return to dashboard
                 self.manager.current = "dashboard"
             else:
-                toast(f"Failed to add category ({response.status_code})")
+                toast(f"Failed: {response.text}")
+
         except Exception as e:
             toast(f"Error: {e}")
+
 
 # --------------------- ADD TRANSACTION ---------------------
 class AddTransactionScreen(MDScreen):
@@ -365,67 +385,93 @@ class AddTransactionScreen(MDScreen):
         self.load_categories()
 
     def load_categories(self):
+        """Load user's categories from API."""
+        from kivymd.toast import toast
+        from kivymd.app import MDApp
+        import requests
+
         app = MDApp.get_running_app()
         headers = app.get_headers()
+
         try:
-            response = requests.get(f"{app.API_BASE}/categories/", headers=headers)
+            response = requests.get(f"{app.API_BASE}/categories/", headers=headers, timeout=5)
             if response.status_code == 200:
                 data = response.json()
+                if not data:
+                    toast("No categories found for this user.")
+                    data = []
             else:
-                toast("Using default categories (no API data)")
-                data = [{"category_id": i + 1, "category_name": c["text"]} for i, c in enumerate(DEFAULT_CATEGORIES)]
-        except Exception:
-            toast("Offline — showing default categories")
-            data = [{"category_id": i + 1, "category_name": c["text"]} for i, c in enumerate(DEFAULT_CATEGORIES)]
+                toast("Failed to load categories from API.")
+                data = []
+        except Exception as e:
+            toast("Error loading categories.")
+            print("Error loading categories:", e)
+            data = []
 
-        menu_items = [
-            {
-                "text": f"{c['category_name']}",
-                "on_release": lambda x=c['category_id'], n=c['category_name']: self.set_category(x, n)
-            } for c in data
-        ]
+        # Build dropdown items from API response
+        menu_items = []
+        for c in data:
+            cid = c.get("category_id") or c.get("id")
+            cname = c.get("category_name") or c.get("name")
+            if cid and cname:
+                menu_items.append({
+                    "text": cname,
+                    "viewclass": "OneLineListItem",
+                    "on_release": lambda x=c: self.set_category(x),
+                })
+
+        if not menu_items:
+            toast("No categories available. Please add one first.")
+
         self.menu = MDDropdownMenu(
             caller=self.ids.category_dropdown,
             items=menu_items,
             width_mult=4,
         )
 
-
-    def set_category(self, category_id, name):
-        self.ids.category_dropdown.set_item(name)
-        self.selected_category = category_id
+    def set_category(self, cat):
+        """Store selected category details."""
+        self.selected_category_id = cat.get("category_id") or cat.get("id")
+        self.ids.category_dropdown.set_item(cat.get("category_name") or cat.get("name"))
         self.menu.dismiss()
 
+
     def add_transaction(self):
+        from kivymd.toast import toast
+        from kivymd.app import MDApp
+        import requests
+
         app = MDApp.get_running_app()
+        headers = app.get_headers()
+
         name = self.ids.name.text.strip()
         amount = self.ids.amount.text.strip()
-        category = getattr(self, "selected_category", None)
-        date = self.ids.date.text.strip()
-        time = self.ids.time.text.strip()
+        category_id = getattr(self, "selected_category_id", None)
 
-        if not name or not amount or not category:
-            toast("Please fill all required fields")
+        if not name or not amount or not category_id:
+            toast("Please fill all fields and choose a category.")
             return
 
-        headers = app.get_headers()
         data = {
             "transaction_name": name,
-            "transaction_amount": amount,
-            "category": category,
+            "transaction_amount": float(amount),
+            "category_id": category_id,
         }
-        if date:
-            data["transaction_date"] = date
-        if time:
-            data["transaction_time"] = time
 
         try:
-            response = requests.post(f"{app.API_BASE}/transactions/", data=data, headers=headers)
+            response = requests.post(
+                f"{app.API_BASE}/transactions/",
+                json=data,
+                headers=headers,
+                timeout=5
+            )
+            print("Response:", response.status_code, response.text)
+
             if response.status_code in (200, 201):
                 toast("Transaction added successfully!")
                 self.manager.current = "dashboard"
             else:
-                toast("Failed to add transaction.")
+                toast(f"Failed: {response.text}")
         except Exception as e:
             toast(f"Error: {e}")
 

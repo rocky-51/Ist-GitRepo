@@ -26,7 +26,7 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TransactionCategory
         fields = ['user_id', 'category_id', 'category_name', 'category_color']  # use actual model field names
-        read_only_fields = ['user_id']
+        read_only_fields = ['category_id','user_id']
 
 
 # ---------- Expense Serializer ----------

@@ -25,6 +25,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     queryset = TransactionCategory.objects.all().order_by('-category_id')
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
+    def perform_create(self, serializer):
+        serializer.save(user_id=self.request.user)
 
 
 # ---------- EXPENSE VIEWSET ----------
@@ -34,8 +36,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Each user sees only their own expenses
-        return Transaction.objects.filter(user=self.request.user).order_by('-date')
+        return Transaction.objects.filter(user_id=self.request.user).order_by('-date')
 
     def perform_create(self, serializer):
         # Automatically assign logged-in user to expense
-        serializer.save(user=self.request.user)
+        serializer.save(user_id=self.request.user)

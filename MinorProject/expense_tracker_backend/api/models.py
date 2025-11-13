@@ -39,7 +39,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.email
 
 class TransactionCategory(models.Model):
-    category_id = models.CharField(primary_key=True,max_length=100)
+    category_id = models.AutoField(primary_key=True,max_length=100)
     user_id = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='TransactionCategory')
     category_name = models.CharField(max_length=100, unique=True)
     category_color = models.TextField(blank=True, null=True)
