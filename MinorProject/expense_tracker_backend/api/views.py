@@ -36,7 +36,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Each user sees only their own expenses
-        return Transaction.objects.filter(user_id=self.request.user).order_by('-date')
+        return Transaction.objects.filter(user_id=self.request.user).order_by('-transaction_date')
 
     def perform_create(self, serializer):
         # Automatically assign logged-in user to expense

@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 # Create your models here.
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
@@ -39,7 +40,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.email
 
 class TransactionCategory(models.Model):
-    category_id = models.AutoField(primary_key=True,max_length=100)
+    category_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='TransactionCategory')
     category_name = models.CharField(max_length=100, unique=True)
     category_color = models.TextField(blank=True, null=True)
@@ -48,17 +49,18 @@ class TransactionCategory(models.Model):
         verbose_name_plural = "Categories"
 
     def __str__(self):
-        return self.name
+        return self.category_name
 
 
 class Transaction(models.Model):
-    transaction_id = models.CharField(primary_key=True,max_length=100)
+    transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='transaction')
     category_id = models.ForeignKey(TransactionCategory, on_delete=models.SET_NULL, null=True, related_name='transaction')
     transaction_name = models.CharField(max_length=200)
     transaction_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    transaction_date = models.DateField()
+    transaction_date = models.DateField(auto_now_add=True)
     transaction_time = models.TimeField(auto_now_add=True)
 
+
     def __str__(self):
-        return f"{self.title} - ₹{self.amount}"
+        return f"{self.transaction_name} - ₹{self.transaction_amount}"

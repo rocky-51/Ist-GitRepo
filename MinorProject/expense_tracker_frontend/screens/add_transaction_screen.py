@@ -12,48 +12,47 @@ add_transaction_screen='''
         MDBoxLayout:
             orientation: "vertical"
             padding: "20dp"
-            spacing: "10dp"
+            spacing: "15dp"
 
             MDTopAppBar:
                 title: "Add Transaction"
-                elevation: 10
-                # left_action_items: [['arrow-left', 'on_release', app.root.current = 'dashboard']]
+                left_action_items: [["arrow-left", lambda x: root.load_dashboard()]]
 
             MDTextField:
-                id: name
+                id: transaction_name
                 hint_text: "Transaction Name"
                 icon_right: "note-edit"
+                mode: "rectangle"
 
             MDTextField:
-                id: amount
-                hint_text: "Amount (₹)" 
+                id: transaction_amount
+                hint_text: "Amount (₹)"
                 input_filter: "float"
-                icon_right: "cash"
-
-            MDDropDownItem:
-                id: category_dropdown
-                text: "Select Category"
-                pos_hint: {"center_x": 0.5}
-                on_release: root.menu.open()
-                text_color: app.theme_cls.primary_light
+                icon_right: "currency-inr"
+                mode: "rectangle"
 
             MDTextField:
-                id: date
+                id: category_name
+                hint_text: "Category"
+                readonly: True
+                icon_right: "menu-down"
+                mode: "rectangle"
+                on_focus: if self.focus: root.open_category_menu()
+
+            MDTextField:
+                id: transaction_date
                 hint_text: "Date (YYYY-MM-DD)"
                 helper_text: "Leave empty for today"
-                icon_right: "calendar"
+                mode: "rectangle"
 
             MDTextField:
-                id: time
+                id: transaction_time
                 hint_text: "Time (HH:MM:SS)"
-                helper_text: "Leave empty for current time"
-                icon_right: "clock"
+                helper_text: "Leave empty for now"
+                mode: "rectangle"
 
-            MDRoundFlatButton :
+            MDRaisedButton:
                 text: "Add Transaction"
+                md_bg_color: 0, 0.7, 1, 1
                 on_release: root.add_transaction()
-
-            MDRoundFlatButton :
-                text: "Back to Dashboard"
-                on_release: root.manager.current = "dashboard"
 '''

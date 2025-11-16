@@ -2,6 +2,7 @@ from kivymd.app import MDApp
 from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.list import OneLineListItem
 from kivy.metrics import dp
 from kivymd.toast import toast
 from kivy.lang import Builder
@@ -170,7 +171,7 @@ class DashboardScreen(MDScreen):
         app = MDApp.get_running_app()
         headers = MDApp.get_running_app().get_headers()
         try:
-            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
             if response.status_code == 200:
                 data = response.json()
                 total_expenses = sum(float(t["transaction_amount"]) for t in data)
@@ -200,6 +201,7 @@ class DashboardScreen(MDScreen):
 class TransactionsScreen(MDScreen):
     def on_enter(self):
         headers = MDApp.get_running_app().get_headers()
+        self.load_transactions()
 
     def get_headers(self):
         if os.path.exists(TOKEN_FILE):
@@ -208,44 +210,6 @@ class TransactionsScreen(MDScreen):
                 access = data.get("access")
                 return {"Authorization": f"Bearer {access}"}
         return {}
-
-    def load_transactions(self):
-        """Fetch all transactions from backend"""
-        app = MDApp.get_running_app()
-        headers = MDApp.get_running_app().get_headers()
-
-        try:
-            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                self.ids.transactions_list.clear_widgets()
-                from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget, IconRightWidget
-
-                for t in data[::-1]:  # newest first
-                    item = TwoLineIconListItem(
-                        text=f"{t['transaction_name']} - ₹{t['transaction_amount']}",
-                        secondary_text=f"{t['transaction_date']} | Category: {t['category']}",
-                    )
-
-                    # Edit icon
-                    edit_icon = IconLeftWidget(
-                        icon="pencil",
-                        on_release=lambda x, tid=t["transaction_id"]: self.edit_transaction(tid),
-                    )
-                    item.add_widget(edit_icon)
-
-                    # Delete icon
-                    delete_icon = IconRightWidget(
-                        icon="delete",
-                        on_release=lambda x, tid=t["transaction_id"]: self.delete_transaction(tid),
-                    )
-                    item.add_widget(delete_icon)
-
-                    self.ids.transactions_list.add_widget(item)
-            else:
-                toast("No transactions found.")
-        except Exception as e:
-            toast(f"Error: {e}")
 
     def edit_transaction(self, transaction_id):
         """Store selected transaction ID and move to Update Screen"""
@@ -260,7 +224,7 @@ class TransactionsScreen(MDScreen):
 
         try:
             response = requests.delete(
-                f"{app.API_BASE}/transactions/{transaction_id}/", headers=headers
+                f"{app.API_BASE}/expenses/{transaction_id}/", headers=headers
             )
             if response.status_code in (200, 204):
                 toast("Transaction deleted successfully.")
@@ -274,7 +238,7 @@ class TransactionsScreen(MDScreen):
         app = MDApp.get_running_app()
         headers = MDApp.get_running_app().get_headers()
         try:
-            response = requests.get(f"{app.API_BASE}/transactions/", headers=headers)
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
             if response.status_code == 200:
                 data = response.json()
                 total_expenses = sum(float(t["transaction_amount"]) for t in data)
@@ -294,6 +258,50 @@ class TransactionsScreen(MDScreen):
         except Exception as e:
             toast(f"Error: {e}")
         self.manager.current = "dashboard"
+    
+    def load_transactions(self):
+        """Load transactions from Django backend and show them."""
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        try:
+            response = requests.get(
+                f"{app.API_BASE}/expenses/",
+                headers=headers,
+                timeout=5
+            )
+            print("Transaction API Response:", response.status_code, response.text)
+
+            if response.status_code != 200:
+                toast("Failed to load transactions.")
+                return
+
+            transactions = response.json()
+
+        except Exception as e:
+            toast("Error loading transactions.")
+            print("Error:", e)
+            return
+
+        # Clear previous items
+        self.ids.transactions_list.clear_widgets()
+
+        if not transactions:
+            toast("No transactions found.")
+            return
+
+        # Add transactions to list
+        for tx in transactions:
+            name = tx.get("transaction_name", "")
+            amount = tx.get("transaction_amount", 0)
+            date = tx.get("transaction_date", "")
+            transaction_id = tx.get("transaction_id")
+
+            item = OneLineListItem(
+                text=f"{name} - ₹{amount} on {date}",
+                on_release=lambda x, t=transaction_id: self.open_transaction_details(t)
+            )
+            self.ids.transactions_list.add_widget(item)
 
     def logout(self):
         if os.path.exists(TOKEN_FILE):
@@ -380,101 +388,126 @@ class AddCategoryScreen(MDScreen):
 
 # --------------------- ADD TRANSACTION ---------------------
 class AddTransactionScreen(MDScreen):
+
+    menu = None   # IMPORTANT
+
     def on_pre_enter(self):
-        """Load categories when screen opens"""
-        self.load_categories()
+        """Auto-fill current date & time."""
+        from datetime import datetime
+        now = datetime.now()
+        self.ids.transaction_date.text = now.strftime("%Y-%m-%d")
+        self.ids.transaction_time.text = now.strftime("%H:%M:%S")
 
-    def load_categories(self):
-        """Load user's categories from API."""
-        from kivymd.toast import toast
-        from kivymd.app import MDApp
-        import requests
+    # ------------------------------
+    # OPEN CATEGORY DROPDOWN
+    # ------------------------------
+    def open_category_menu(self):
+        from kivymd.uix.menu import MDDropdownMenu
 
-        app = MDApp.get_running_app()
-        headers = app.get_headers()
+        # Popular categories + stored category IDs
+        categories = [
+            {"text": "Food", "cat_id": 1},
+            {"text": "Bills", "cat_id": 2},
+            {"text": "Shopping", "cat_id": 3},
+            {"text": "Fees", "cat_id": 4},
+            {"text": "Travel", "cat_id": 5},
+        ]
 
-        try:
-            response = requests.get(f"{app.API_BASE}/categories/", headers=headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if not data:
-                    toast("No categories found for this user.")
-                    data = []
-            else:
-                toast("Failed to load categories from API.")
-                data = []
-        except Exception as e:
-            toast("Error loading categories.")
-            print("Error loading categories:", e)
-            data = []
+        menu_items = [
+            {
+                "text": c["text"],
+                "viewclass": "OneLineListItem",
+                "on_release": lambda x=c: self.set_category(x)
+            }
+            for c in categories
+        ]
 
-        # Build dropdown items from API response
-        menu_items = []
-        for c in data:
-            cid = c.get("category_id") or c.get("id")
-            cname = c.get("category_name") or c.get("name")
-            if cid and cname:
-                menu_items.append({
-                    "text": cname,
-                    "viewclass": "OneLineListItem",
-                    "on_release": lambda x=c: self.set_category(x),
-                })
-
-        if not menu_items:
-            toast("No categories available. Please add one first.")
-
+        # Create menu **ONLY IF NOT ALREADY CREATED**
         self.menu = MDDropdownMenu(
-            caller=self.ids.category_dropdown,
+            caller=self.ids.category_name,
             items=menu_items,
-            width_mult=4,
+            width_mult=4
         )
 
-    def set_category(self, cat):
-        """Store selected category details."""
-        self.selected_category_id = cat.get("category_id") or cat.get("id")
-        self.ids.category_dropdown.set_item(cat.get("category_name") or cat.get("name"))
-        self.menu.dismiss()
+        self.menu.open()
 
+    def set_category(self, c):
+        """Set selected category."""
+        self.ids.category_name.text = c["text"]
+        self.selected_category_id = c["cat_id"]
 
+        if self.menu:
+            self.menu.dismiss()
+
+    # ------------------------------
+    # ADD TRANSACTION
+    # ------------------------------
     def add_transaction(self):
         from kivymd.toast import toast
         from kivymd.app import MDApp
         import requests
 
-        app = MDApp.get_running_app()
-        headers = app.get_headers()
-
-        name = self.ids.name.text.strip()
-        amount = self.ids.amount.text.strip()
+        name = self.ids.transaction_name.text
+        amount = self.ids.transaction_amount.text
+        date = self.ids.transaction_date.text
+        time = self.ids.transaction_time.text
         category_id = getattr(self, "selected_category_id", None)
 
         if not name or not amount or not category_id:
-            toast("Please fill all fields and choose a category.")
+            toast("Please fill all required fields!")
             return
 
-        data = {
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        payload = {
             "transaction_name": name,
-            "transaction_amount": float(amount),
+            "transaction_amount": amount,
+            "transaction_date": date,
+            "transaction_time": time,
             "category_id": category_id,
         }
 
-        try:
-            response = requests.post(
-                f"{app.API_BASE}/transactions/",
-                json=data,
-                headers=headers,
-                timeout=5
-            )
-            print("Response:", response.status_code, response.text)
+        print("Sending Transaction:", payload)
 
-            if response.status_code in (200, 201):
-                toast("Transaction added successfully!")
-                self.manager.current = "dashboard"
+        response = requests.post(
+            f"{app.API_BASE}/expenses/",
+            json=payload,
+            headers=headers
+        )
+
+        print("Add Response:", response.status_code, response.text)
+
+        if response.status_code in (200, 201):
+            toast("Transaction Added Successfully!")
+            self.manager.current = "transactions"
+        else:
+            toast(f"Error: {response.text}")
+            
+    def load_dashboard(self):
+        app = MDApp.get_running_app()
+        headers = MDApp.get_running_app().get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                total_expenses = sum(float(t["transaction_amount"]) for t in data)
+                self.ids.balance.text = f"₹{10000 - total_expenses:.2f}"
+                self.ids.expenses.text = f"₹{total_expenses:.2f}"
+
+                self.ids.transactions_list.clear_widgets()
+                from kivymd.uix.list import OneLineListItem
+                for t in data[-5:][::-1]:
+                    self.ids.transactions_list.add_widget(
+                        OneLineListItem(
+                            text=f"{t['transaction_name']} - ₹{t['transaction_amount']}"
+                        )
+                    )
             else:
-                toast(f"Failed: {response.text}")
+                toast("No transactions found.")
         except Exception as e:
             toast(f"Error: {e}")
-
+        self.manager.current = "dashboard"
 
 if __name__ == "__main__":
     ExpenseTrackerApp().run()

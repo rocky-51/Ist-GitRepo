@@ -32,25 +32,17 @@ class CategorySerializer(serializers.ModelSerializer):
 # ---------- Expense Serializer ----------
 
 class TransactionSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    category = serializers.PrimaryKeyRelatedField(
-        queryset=TransactionCategory.objects.all(),
-        source='category',
-        write_only=True
-    )
-    # expose category details on read
-    category_detail = CategorySerializer(source='category', read_only=True)
-
     class Meta:
         model = Transaction
         fields = [
-            'transaction_id',               # primary key (or transaction_id if you actually have that)
-            'user_id',             # nested read-only user object
-            'category_id',  # read-only nested category
+            'transaction_id',
             'transaction_name',
             'transaction_amount',
             'transaction_date',
             'transaction_time',
+            'category_id',
+            'user_id'
         ]
-        read_only_fields = ['transaction_id', 'transaction_date', 'user_id']
+        read_only_fields = ['transaction_id', 'transaction_date', 'transaction_time', 'user_id']
+
 
