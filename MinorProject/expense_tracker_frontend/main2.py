@@ -13,6 +13,7 @@ from screens.dashboard_screen import dashboard_screen
 from screens.add_category_screen import add_category_screen
 from screens.add_transaction_screen import add_transaction_screen
 from screens.transactions_sceen import transactions_screen
+from screens.edit_transaction_screen import edit_transaction_screen
 from kivy.uix.screenmanager import FadeTransition
 from kivy.clock import Clock
 from kivy.animation import Animation
@@ -63,6 +64,7 @@ class ExpenseTrackerApp(MDApp):
         Builder.load_string(dashboard_screen)
         Builder.load_string(add_category_screen)
         Builder.load_string(add_transaction_screen)
+        Builder.load_string(edit_transaction_screen)
         Builder.load_string(transactions_screen)
 
 
@@ -73,6 +75,7 @@ class ExpenseTrackerApp(MDApp):
         sm.add_widget(DashboardScreen(name="dashboard"))
         sm.add_widget(AddCategoryScreen(name="add_category"))
         sm.add_widget(AddTransactionScreen(name="add_transaction"))
+        sm.add_widget(EditTransactionScreen(name="edit_transaction"))
         sm.add_widget(TransactionsScreen(name="transactions"))
         sm.current = "splash"
         return sm
@@ -104,6 +107,10 @@ class SplashScreen(MDScreen):
 # --------------------- LOGIN ---------------------
 class LoginScreen(MDScreen):
     def login(self):
+        import requests, json
+        from kivymd.toast import toast
+        app = MDApp.get_running_app()
+
         email = self.ids.email.text.strip()
         password = self.ids.password.text.strip()
 
@@ -116,25 +123,39 @@ class LoginScreen(MDScreen):
                 ExpenseTrackerApp.TOKEN_URL,
                 data={"email": email, "password": password},
             )
+
+            print("LOGIN RAW RESPONSE:", response.text)
+
             if response.status_code == 200:
                 data = response.json()
+
                 access = data.get("access")
                 refresh = data.get("refresh")
                 user_id = data.get("user_id")
 
+                print("Extracted user_id =", user_id)
+
+                # SAVE TO FILE
                 with open(TOKEN_FILE, "w") as f:
                     json.dump({"access": access, "refresh": refresh, "user_id": user_id}, f)
 
-                app = MDApp.get_running_app()
-                app.current_user_id = user_id  # ✅ store globally
+                # SAVE TO APP
+                app.access_token = access
+                app.refresh_token = refresh
+                app.current_user_id = user_id    # 🚀 FIXED
+
+                print("APP USER ID STORED =", app.current_user_id)
 
                 toast("Login successful!")
                 self.manager.current = "dashboard"
+
             else:
                 toast("Invalid credentials — please register first.")
                 self.manager.current = "register"
+
         except Exception as e:
             toast(f"Error: {e}")
+
 
 
 # --------------------- REGISTER ---------------------
@@ -211,28 +232,42 @@ class TransactionsScreen(MDScreen):
                 return {"Authorization": f"Bearer {access}"}
         return {}
 
-    def edit_transaction(self, transaction_id):
-        """Store selected transaction ID and move to Update Screen"""
-        app = MDApp.get_running_app()
-        app.transaction_to_edit = transaction_id
-        self.manager.current = "update_transaction"
+    def open_edit_transaction(self):
+        self.dialog.dismiss()
+        tx = self.selected_transaction
 
-    def delete_transaction(self, transaction_id):
-        """Delete selected transaction"""
-        app = MDApp.get_running_app()
-        headers = MDApp.get_running_app().get_headers()
+        screen = self.manager.get_screen("edit_transaction")
 
-        try:
-            response = requests.delete(
-                f"{app.API_BASE}/expenses/{transaction_id}/", headers=headers
-            )
-            if response.status_code in (200, 204):
-                toast("Transaction deleted successfully.")
-                self.load_transactions()
-            else:
-                toast("Failed to delete transaction.")
-        except Exception as e:
-            toast(f"Error: {e}")
+        screen.transaction_id = tx["transaction_id"]
+        screen.ids.edit_name.text = tx["transaction_name"]
+        screen.ids.edit_amount.text = str(tx["transaction_amount"])
+        screen.ids.edit_date.text = tx["transaction_date"]
+        screen.ids.edit_time.text = tx["transaction_time"]
+
+        self.manager.current = "edit_transaction"
+
+
+    def delete_transaction(self):
+
+        tx = self.selected_transaction
+        transaction_id = tx["transaction_id"]
+
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        response = requests.delete(
+            f"{app.API_BASE}/expenses/{transaction_id}/",
+            headers=headers
+        )
+
+        if response.status_code in (200, 204):
+            toast("Transaction deleted!")
+            self.dialog.dismiss()
+            self.load_transactions()
+        else:
+            toast("Failed to delete")
+
+
 
     def load_dashboard(self):
         app = MDApp.get_running_app()
@@ -260,48 +295,60 @@ class TransactionsScreen(MDScreen):
         self.manager.current = "dashboard"
     
     def load_transactions(self):
-        """Load transactions from Django backend and show them."""
+
         app = MDApp.get_running_app()
         headers = app.get_headers()
 
         try:
-            response = requests.get(
-                f"{app.API_BASE}/expenses/",
-                headers=headers,
-                timeout=5
-            )
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
             print("Transaction API Response:", response.status_code, response.text)
 
             if response.status_code != 200:
-                toast("Failed to load transactions.")
+                toast("Failed to load transactions")
                 return
 
             transactions = response.json()
 
         except Exception as e:
-            toast("Error loading transactions.")
-            print("Error:", e)
+            toast("Error loading data")
+            print(e)
             return
 
-        # Clear previous items
+        # Clear list
         self.ids.transactions_list.clear_widgets()
 
-        if not transactions:
-            toast("No transactions found.")
-            return
-
-        # Add transactions to list
+        # Add items
         for tx in transactions:
-            name = tx.get("transaction_name", "")
-            amount = tx.get("transaction_amount", 0)
-            date = tx.get("transaction_date", "")
-            transaction_id = tx.get("transaction_id")
-
             item = OneLineListItem(
-                text=f"{name} - ₹{amount} on {date}",
-                on_release=lambda x, t=transaction_id: self.open_transaction_details(t)
+                text=f"{tx['transaction_name']} • ₹{tx['transaction_amount']} • {tx['transaction_date']}",
+                on_release=lambda x, t=tx: self.open_transaction_details(t)
             )
             self.ids.transactions_list.add_widget(item)
+
+    def open_transaction_details(self, tx):
+        from kivymd.uix.dialog import MDDialog
+        from kivymd.uix.button import MDFlatButton
+
+        self.selected_transaction = tx  # store globally
+
+        self.dialog = MDDialog(
+            title="Transaction Options",
+            text=(
+                f"Name: {tx['transaction_name']}\n"
+                f"Amount: ₹{tx['transaction_amount']}\n"
+                f"Date: {tx['transaction_date']}\n"
+                f"Time: {tx['transaction_time']}\n"
+                f"Category ID: {tx['category_id']}"
+            ),
+            buttons=[
+                MDFlatButton(text="Edit", on_release=lambda x: self.open_edit_transaction()),
+                MDFlatButton(text="Delete", on_release=lambda x: self.delete_transaction()),
+                MDFlatButton(text="Close", on_release=lambda x: self.dialog.dismiss()),
+            ]
+        )
+        self.dialog.open()
+
+
 
     def logout(self):
         if os.path.exists(TOKEN_FILE):
@@ -340,11 +387,9 @@ class AddCategoryScreen(MDScreen):
 
     def add_category(self):
 
-        # Step 1: Get form input
         name = self.ids.category_name.text.strip()
         color = self.ids.category_color.text.strip()
 
-        # Step 2: Validate input
         if not name:
             toast("Please enter category name")
             return
@@ -352,22 +397,20 @@ class AddCategoryScreen(MDScreen):
             toast("Please enter color (e.g. #E57373)")
             return
 
-        # Step 3: Access app instance
         app = MDApp.get_running_app()
         headers = app.get_headers()
 
-        # ✅ Step 4: Safely get user_id from the app
+        # ✅ FIX: include user_id in payload
         data = {
             "category_name": name,
             "category_color": color,
+            "user_id": app.current_user_id
         }
 
-
-        # Step 6: Send POST request
         try:
             response = requests.post(
                 f"{app.API_BASE}/categories/",
-                json=data,  # ✅ use JSON payload
+                json=data,
                 headers=headers,
                 timeout=5
             )
@@ -380,10 +423,21 @@ class AddCategoryScreen(MDScreen):
                 self.ids.category_color.text = ""
                 self.manager.current = "dashboard"
             else:
-                toast(f"Failed: {response.text}")
+                error = response.json()
+                if "category_name" in error:
+                    toast("Category already exists!")
+                else:
+                    toast(f"Failed: {response.text}")
+    
+            if response.status_code == 400:
+                if "category_name" in response.json():
+                    toast("Category already exists!")
+                    return
+
 
         except Exception as e:
             toast(f"Error: {e}")
+
 
 
 # --------------------- ADD TRANSACTION ---------------------
@@ -392,52 +446,34 @@ class AddTransactionScreen(MDScreen):
     menu = None   # IMPORTANT
 
     def on_pre_enter(self):
-        """Auto-fill current date & time."""
+        """Auto-fill date/time and load categories safely."""
         from datetime import datetime
         now = datetime.now()
         self.ids.transaction_date.text = now.strftime("%Y-%m-%d")
         self.ids.transaction_time.text = now.strftime("%H:%M:%S")
 
+        self.selected_category_id = None
+        # self.menu = None  # Reset menu every time user enters
+        self.load_categories()
+
+
     # ------------------------------
     # OPEN CATEGORY DROPDOWN
     # ------------------------------
     def open_category_menu(self):
-        from kivymd.uix.menu import MDDropdownMenu
+        if self.menu:
+            self.menu.open()
+        else:
+            from kivymd.toast import toast
+            toast("No categories available")
 
-        # Popular categories + stored category IDs
-        categories = [
-            {"text": "Food", "cat_id": 1},
-            {"text": "Bills", "cat_id": 2},
-            {"text": "Shopping", "cat_id": 3},
-            {"text": "Fees", "cat_id": 4},
-            {"text": "Travel", "cat_id": 5},
-        ]
-
-        menu_items = [
-            {
-                "text": c["text"],
-                "viewclass": "OneLineListItem",
-                "on_release": lambda x=c: self.set_category(x)
-            }
-            for c in categories
-        ]
-
-        # Create menu **ONLY IF NOT ALREADY CREATED**
-        self.menu = MDDropdownMenu(
-            caller=self.ids.category_name,
-            items=menu_items,
-            width_mult=4
-        )
-
-        self.menu.open()
-
-    def set_category(self, c):
-        """Set selected category."""
-        self.ids.category_name.text = c["text"]
-        self.selected_category_id = c["cat_id"]
+    def set_category(self, category_obj):
+        self.ids.category_name.text = category_obj["category_name"]
+        self.selected_category_id = category_obj["category_id"]
 
         if self.menu:
             self.menu.dismiss()
+
 
     # ------------------------------
     # ADD TRANSACTION
@@ -508,6 +544,94 @@ class AddTransactionScreen(MDScreen):
         except Exception as e:
             toast(f"Error: {e}")
         self.manager.current = "dashboard"
+    
+    def load_categories(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        try:
+            response = requests.get(f"{app.API_BASE}/categories/", headers=headers)
+            categories = response.json()
+        except Exception as e:
+            print("Category API Error:", e)
+            categories = []
+
+        print("API returned:", categories)
+        print("User ID:", app.current_user_id)
+
+        # Fix wrong key name (backend uses user_id or user field)
+        for c in categories:
+            if "user_id" not in c and "user" in c:
+                c["user_id"] = c["user"]
+
+        # Filter only user's categories
+        categories = [
+            c for c in categories
+            if str(c.get("user_id")) == str(app.current_user_id)
+        ]
+
+        print("Filtered categories:", categories)
+
+        if not categories:
+            toast("No categories found!")
+            self.menu = None
+            return
+
+        menu_items = [
+            {
+                "text": c["category_name"],
+                "viewclass": "OneLineListItem",
+                "on_release": lambda x=c: self.set_category(x)
+            }
+            for c in categories
+        ]
+
+        self.menu = MDDropdownMenu(
+            caller=self.ids.category_name,
+            items=menu_items,
+            width_mult=4
+        )
+
+
+
+# --------------------- EDIT TRANSACTION SCREEN ---------------------
+class EditTransactionScreen(MDScreen):
+    transaction_id = None
+
+    def update_transaction(self):
+
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        payload = {
+            "transaction_name": self.ids.edit_name.text,
+            "transaction_amount": self.ids.edit_amount.text,
+            "transaction_date": self.ids.edit_date.text,
+            "transaction_time": self.ids.edit_time.text,
+        }
+
+        response = requests.put(
+            f"{app.API_BASE}/expenses/{self.transaction_id}/",
+            json=payload,
+            headers=headers
+        )
+
+        if response.status_code in (200, 202):
+            toast("Transaction updated!")
+
+            # FIX 🟢 refresh transaction list
+            tx_screen = self.manager.get_screen("transactions")
+            tx_screen.load_transactions()
+
+            self.manager.current = "transactions"
+        else:
+            toast("Failed to update transaction")
+
+    def go_back_to_transactions(self):
+        tx_screen = self.manager.get_screen("transactions")
+        tx_screen.load_transactions()  # refresh list
+        self.manager.current = "transactions"
+
 
 if __name__ == "__main__":
     ExpenseTrackerApp().run()

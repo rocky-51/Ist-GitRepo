@@ -42,10 +42,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 class TransactionCategory(models.Model):
     category_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='TransactionCategory')
-    category_name = models.CharField(max_length=100, unique=True)
-    category_color = models.TextField(blank=True, null=True)
+    category_name = models.CharField(max_length=255)
+    category_color = models.CharField(max_length=10, default="#FFFFFF")
 
     class Meta:
+        unique_together = ('user_id', 'category_name')
         verbose_name_plural = "Categories"
 
     def __str__(self):
