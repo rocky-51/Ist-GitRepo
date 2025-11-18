@@ -188,9 +188,10 @@ class ProfileScreen(MDScreen):
 
         payload = {
             "name": self.ids.user_name.text,
+            "email": self.ids.user_email.text,
         }
 
-        response = requests.patch(f"{app.API_BASE}/profile/", json=payload, headers=headers)
+        response = requests.patch(f"{app.API_BASE}/profile/update-profile/", json=payload, headers=headers)
 
         if response.status_code == 200:
             toast("Profile updated!")
@@ -201,7 +202,7 @@ class ProfileScreen(MDScreen):
         app = MDApp.get_running_app()
         headers = app.get_headers()
 
-        response = requests.delete(f"{app.API_BASE}/profile", headers=headers)
+        response = requests.delete(f"{app.API_BASE}/profile/delete-account", headers=headers)
 
         if response.status_code == 204:
             toast("Account deleted!")

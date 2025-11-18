@@ -18,7 +18,6 @@ profile_screen='''
             id: user_email
             hint_text: "Your Email"
             mode: "rectangle"
-            readonly: True  # Email usually not editable
 
         MDRaisedButton:
             text: "Update Profile"

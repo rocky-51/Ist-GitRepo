@@ -17,7 +17,8 @@ class UserAccountViewSet(viewsets.ViewSet):
         serializer = UserSerializer(user)
         return Response(serializer.data)
 
-    def update(self, request):
+    @action(detail=False, methods=["patch"], url_path="update-profile")
+    def update_user(user, request):
         user = request.user
         serializer = UserSerializer(user, data=request.data, partial=True)
 
@@ -26,10 +27,11 @@ class UserAccountViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
     
-    @api_view(['DELETE'])
-    def delete_own_profile(request):
-        request.user.delete()
-        return Response({"message": "Account deleted successfully"}, status=204)
+    @action(detail=False, methods=["delete"], url_path="delete-account")
+    def destroy_user(self, request):
+        user = request.user
+        user.delete()
+        return Response({"message": "User account deleted successfully"}, status=200)
 
     
     @action(detail=False, methods=["post"], url_path="change-password")

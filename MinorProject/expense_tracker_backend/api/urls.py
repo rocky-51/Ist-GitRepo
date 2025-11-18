@@ -10,7 +10,7 @@ router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'expenses', TransactionViewSet, basename='transaction')
-router.register("profile", UserAccountViewSet, basename="profile")
+router.register(r'profile', UserAccountViewSet, basename='profile')
 
 urlpatterns = [
     path('', include(router.urls)),
