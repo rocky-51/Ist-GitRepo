@@ -9,6 +9,8 @@ from kivy.lang import Builder
 from screens.splash_screen import splash_screen
 from screens.helper import expensetracker
 from screens.register_screen import register_screen
+from screens.profile_screen import profile_screen
+from screens.change_password_screen import change_password_screen
 from screens.dashboard_screen import dashboard_screen
 from screens.add_category_screen import add_category_screen
 from screens.add_transaction_screen import add_transaction_screen
@@ -21,6 +23,7 @@ from kivy.animation import Animation
 import requests
 import json
 import os
+import base64
 
 TOKEN_FILE = "auth_token.json"
 
@@ -61,6 +64,8 @@ class ExpenseTrackerApp(MDApp):
         Builder.load_string(splash_screen)
         Builder.load_string(expensetracker)
         Builder.load_string(register_screen)
+        Builder.load_string(profile_screen)
+        Builder.load_string(change_password_screen)
         Builder.load_string(dashboard_screen)
         Builder.load_string(add_category_screen)
         Builder.load_string(add_transaction_screen)
@@ -72,6 +77,8 @@ class ExpenseTrackerApp(MDApp):
         sm.add_widget(SplashScreen(name="splash"))
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(RegisterScreen(name="register"))
+        sm.add_widget(ProfileScreen(name="profile"))
+        sm.add_widget(ChangePasswordScreen(name="change_password"))
         sm.add_widget(DashboardScreen(name="dashboard"))
         sm.add_widget(AddCategoryScreen(name="add_category"))
         sm.add_widget(AddTransactionScreen(name="add_transaction"))
@@ -106,11 +113,19 @@ class SplashScreen(MDScreen):
 
 # --------------------- LOGIN ---------------------
 class LoginScreen(MDScreen):
-    def login(self):
-        import requests, json
-        from kivymd.toast import toast
-        app = MDApp.get_running_app()
 
+    def get_user_id_from_token(self, token):
+        """Decode JWT without verifying signature and extract user_id."""
+        try:
+            payload_part = token.split(".")[1]
+            padded = payload_part + "=" * (-len(payload_part) % 4)
+            decoded = base64.urlsafe_b64decode(padded)
+            data = json.loads(decoded)
+            return data.get("user_id")
+        except:
+            return None
+        
+    def login(self):
         email = self.ids.email.text.strip()
         password = self.ids.password.text.strip()
 
@@ -124,39 +139,172 @@ class LoginScreen(MDScreen):
                 data={"email": email, "password": password},
             )
 
-            print("LOGIN RAW RESPONSE:", response.text)
+            print("LOGIN RESPONSE:", response.text)
 
             if response.status_code == 200:
                 data = response.json()
-
                 access = data.get("access")
                 refresh = data.get("refresh")
-                user_id = data.get("user_id")
 
-                print("Extracted user_id =", user_id)
+                # ✅ EXTRACT USER ID FROM JWT
+                user_id = self.get_user_id_from_token(access)
 
-                # SAVE TO FILE
+                print("DECODED USER ID =", user_id)
+
+                if not user_id:
+                    toast("Login failed — couldn't decode user ID")
+                    return
+
                 with open(TOKEN_FILE, "w") as f:
                     json.dump({"access": access, "refresh": refresh, "user_id": user_id}, f)
 
-                # SAVE TO APP
-                app.access_token = access
-                app.refresh_token = refresh
-                app.current_user_id = user_id    # 🚀 FIXED
-
-                print("APP USER ID STORED =", app.current_user_id)
+                # Store in app instance
+                app = MDApp.get_running_app()
+                app.current_user_id = user_id
 
                 toast("Login successful!")
                 self.manager.current = "dashboard"
-
             else:
-                toast("Invalid credentials — please register first.")
-                self.manager.current = "register"
-
+                toast("Invalid credentials")
         except Exception as e:
             toast(f"Error: {e}")
 
+# --------------------- PROFILE SCREEN ---------------------
+class ProfileScreen(MDScreen):
 
+    def on_pre_enter(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        response = requests.get(f"{app.API_BASE}/profile/", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            self.ids.user_name.text = data.get("name", "")
+            self.ids.user_email.text = data.get("email", "")
+
+    def update_profile(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        payload = {
+            "name": self.ids.user_name.text,
+        }
+
+        response = requests.patch(f"{app.API_BASE}/profile/", json=payload, headers=headers)
+
+        if response.status_code == 200:
+            toast("Profile updated!")
+        else:
+            toast(f"Update failed: {response.text}")
+
+    def delete_account(self):
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        response = requests.delete(f"{app.API_BASE}/profile", headers=headers)
+
+        if response.status_code == 204:
+            toast("Account deleted!")
+
+            # Clear token
+            if os.path.exists(TOKEN_FILE):
+                os.remove(TOKEN_FILE)
+
+            self.manager.current = "login"
+        else:
+            toast(f"Delete failed: {response.text}")
+
+    def load_dashboard(self):
+        app = MDApp.get_running_app()
+        headers = MDApp.get_running_app().get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                total_expenses = sum(float(t["transaction_amount"]) for t in data)
+                self.ids.balance.text = f"₹{10000 - total_expenses:.2f}"
+                self.ids.expenses.text = f"₹{total_expenses:.2f}"
+
+                self.ids.transactions_list.clear_widgets()
+                from kivymd.uix.list import OneLineListItem
+                for t in data[-5:][::-1]:
+                    self.ids.transactions_list.add_widget(
+                        OneLineListItem(
+                            text=f"{t['transaction_name']} - ₹{t['transaction_amount']}"
+                        )
+                    )
+            else:
+                toast("No transactions found.")
+        except Exception as e:
+            toast(f"Error: {e}")
+        self.manager.current = "dashboard"
+
+# --------------------- CHANGE PASSWORD SCREEN ---------------------
+class ChangePasswordScreen(MDScreen):
+
+    def change_password(self):
+        from kivymd.toast import toast
+        from kivymd.app import MDApp
+        import requests
+
+        current = self.ids.current_password.text.strip()
+        new = self.ids.new_password.text.strip()
+        confirm = self.ids.confirm_password.text.strip()
+
+        if not current or not new or not confirm:
+            toast("Fill all fields")
+            return
+
+        if new != confirm:
+            toast("New passwords do not match")
+            return
+
+        app = MDApp.get_running_app()
+        headers = app.get_headers()
+
+        payload = {
+            "current_password": current,
+            "new_password": new,
+        }
+
+        url = f"{app.API_BASE}/profile/change-password/"
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+
+            if response.status_code == 200:
+                toast("Password updated successfully!")
+                self.manager.current = "profile"
+            else:
+                toast(f"Failed: {response.text}")
+
+        except Exception as e:
+            toast(f"Error: {e}")
+    
+    def load_dashboard(self):
+        app = MDApp.get_running_app()
+        headers = MDApp.get_running_app().get_headers()
+        try:
+            response = requests.get(f"{app.API_BASE}/expenses/", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                total_expenses = sum(float(t["transaction_amount"]) for t in data)
+                self.ids.balance.text = f"₹{10000 - total_expenses:.2f}"
+                self.ids.expenses.text = f"₹{total_expenses:.2f}"
+
+                self.ids.transactions_list.clear_widgets()
+                from kivymd.uix.list import OneLineListItem
+                for t in data[-5:][::-1]:
+                    self.ids.transactions_list.add_widget(
+                        OneLineListItem(
+                            text=f"{t['transaction_name']} - ₹{t['transaction_amount']}"
+                        )
+                    )
+            else:
+                toast("No transactions found.")
+        except Exception as e:
+            toast(f"Error: {e}")
+        self.manager.current = "dashboard"
 
 # --------------------- REGISTER ---------------------
 class RegisterScreen(MDScreen):
@@ -546,51 +694,56 @@ class AddTransactionScreen(MDScreen):
         self.manager.current = "dashboard"
     
     def load_categories(self):
+
+        print("\n----- LOADING CATEGORIES -----")
+
         app = MDApp.get_running_app()
         headers = app.get_headers()
+        print("APP.USER_ID =", app.current_user_id)
 
         try:
             response = requests.get(f"{app.API_BASE}/categories/", headers=headers)
+            print("RAW CATEGORY API RESPONSE:", response.text)
             categories = response.json()
         except Exception as e:
-            print("Category API Error:", e)
+            print("ERROR FETCHING:", e)
             categories = []
 
-        print("API returned:", categories)
-        print("User ID:", app.current_user_id)
-
-        # Fix wrong key name (backend uses user_id or user field)
+        # Normalize user_id key
         for c in categories:
-            if "user_id" not in c and "user" in c:
+            if "user" in c and "user_id" not in c:
                 c["user_id"] = c["user"]
 
-        # Filter only user's categories
-        categories = [
-            c for c in categories
-            if str(c.get("user_id")) == str(app.current_user_id)
-        ]
+        print("NORMALIZED:", categories)
 
-        print("Filtered categories:", categories)
+        # Filter categories for current user
+        filtered = [c for c in categories if str(c.get("user_id")) == str(app.current_user_id)]
+        print("FILTERED:", filtered)
 
-        if not categories:
-            toast("No categories found!")
+        if not filtered:
+            toast("No categories found for this user.")
             self.menu = None
             return
 
+        # Build menu items
         menu_items = [
             {
                 "text": c["category_name"],
                 "viewclass": "OneLineListItem",
                 "on_release": lambda x=c: self.set_category(x)
-            }
-            for c in categories
+            } for c in filtered
         ]
 
+        print("MENU ITEMS:", menu_items)
+
+        # Build dropdown
         self.menu = MDDropdownMenu(
             caller=self.ids.category_name,
             items=menu_items,
-            width_mult=4
+            width_mult=4,
         )
+
+        print("DROPDOWN CREATED SUCCESSFULLY.")
 
 
 

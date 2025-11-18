@@ -3,7 +3,54 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import CustomUser, TransactionCategory, Transaction
 from .serializers import UserSerializer, CategorySerializer, TransactionSerializer
+from rest_framework import viewsets
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.hashers import check_password
+from rest_framework.decorators import api_view, permission_classes
 
+class UserAccountViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def retrieve(self, request):
+        user = request.user
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
+    def update(self, request):
+        user = request.user
+        serializer = UserSerializer(user, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+    
+    @api_view(['DELETE'])
+    def delete_own_profile(request):
+        request.user.delete()
+        return Response({"message": "Account deleted successfully"}, status=204)
+
+    
+    @action(detail=False, methods=["post"], url_path="change-password")
+    def change_password(self, request, pk=None):
+        user = request.user
+
+        current_password = request.data.get("current_password")
+        new_password = request.data.get("new_password")
+
+        if not current_password or not new_password:
+            return Response({"error": "Both fields required"}, status=400)
+
+        # verify old password
+        if not check_password(current_password, user.password):
+            return Response({"error": "Old password is incorrect"}, status=400)
+
+        # save new password
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"message": "Password changed successfully"}, status=200)
 
 # ---------- USER VIEWSET ----------
 class UserViewSet(viewsets.ModelViewSet):
