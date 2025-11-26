@@ -100,7 +100,7 @@ class SplashScreen(MDScreen):
         fade_in.start(self.ids.app_name)
 
         # After fade-in, stay for a while, then fade-out
-        Clock.schedule_once(self.start_fade_out, 5)
+        Clock.schedule_once(self.start_fade_out, 10)
 
     def start_fade_out(self, *args):
         fade_out = Animation(opacity=0, duration=1)

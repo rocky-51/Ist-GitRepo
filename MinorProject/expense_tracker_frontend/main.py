@@ -7,7 +7,6 @@ from kivy.lang import Builder
 # from screens.login_screen import login_screen
 from screens.helper import expensetracker
 from screens.register_screen import register_screen
-from screens.home_screen import home_screen
 from screens.dashboard_screen import dashboard_screen
 from screens.add_category_screen import add_category_screen
 from screens.add_transaction_screen import add_transaction_screen
