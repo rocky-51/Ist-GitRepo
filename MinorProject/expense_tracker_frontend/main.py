@@ -19,7 +19,6 @@ import os
 Builder.load_string(expensetracker)
 Builder.load_string(register_screen)
 Builder.load_string(dashboard_screen)
-Builder.load_string(home_screen)
 Builder.load_string(add_category_screen)
 Builder.load_string(add_transaction_screen)
 
